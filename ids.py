@@ -1,16 +1,17 @@
-from scapy.all import sniff, IP, TCP, ICMP, DNS, ARP, Raw, DNSQR
+from scapy.all import sniff, IP, TCP, ICMP, DNS, ARP, Raw, DNSQR, Ether
 import time
 from collections import defaultdict,deque
 from datetime import timedelta,datetime
 from scapy.layers.http import HTTPRequest
 
-
+##################
+whitelisted_ips = {"4.153.72.49", "192.168.0.103", "192.168.0.102"}
 
 # for port scan detection
 scan_tracker = {}
 
 # for syn flood detection
-time_window = 10
+time_window = 1
 syn_threshold = 5
 incomplete_threshold = 4
 connections = defaultdict(lambda: {"syn_count": 0, "incomplete_count": 0, "timestamps": []})
@@ -38,6 +39,9 @@ def detect_port_scan(packet):
         # Get source IP and destination port
         src_ip = packet[IP].src
         dst_port = packet[TCP].dport
+
+        if src_ip in whitelisted_ips:
+           return  # Ignore queries from the IDS itself
         
         # Initialize tracker for new IPs
         if src_ip not in scan_tracker:
@@ -56,10 +60,12 @@ def detect_syn_flood(packet):
         current_time = time.time()
 
         # Clean up old timestamps for each IP
-        for ip_addr in list(connections.keys()):
-            connections[ip_addr]["timestamps"] = [t for t in connections[ip_addr]["timestamps"] if current_time - t < time_window]
-            if not connections[ip_addr]["timestamps"]:
-                del connections[ip_addr]
+        connections[src_ip]["timestamps"] = [t for t in connections[src_ip]["timestamps"] if current_time - t < time_window]
+
+        # Remove IP if no recent activity
+        if not connections[src_ip]["timestamps"]:
+            del connections[src_ip]
+            return
 
         # Update counts based on packet flags
         if packet[TCP].flags == 'S':  # SYN packet
@@ -74,7 +80,6 @@ def detect_syn_flood(packet):
 
 def detect_icmp_flood(packet):
     if packet.haslayer(ICMP):
-        print("ICMP packet detected:", packet.summary())
         
         # Get the current timestamp
         current_time = time.time()
@@ -90,14 +95,51 @@ def detect_icmp_flood(packet):
         # If packet rate exceeds threshold, flag as potential ICMP flood
         if icmp_packet_rate > icmp_threshold:
             print(f"ALERT: Potential ICMP flood detected! Rate: {icmp_packet_rate:.2f} packets/sec")
-        else:
-            print(f"ICMP Packet Rate: {icmp_packet_rate:.2f} packets/sec")  # Optional monitoring output
+
+
+# DNS flood detection
+
+DNS_threshold = 50  # Threshold of DNS requests per second
+monitor_interval = 1  # Monitoring interval in seconds
+dns_packet_timestamp = deque()
+
+def detect_dns_flood(packet):
+    src_ip = packet[IP].src
+    if src_ip in whitelisted_ips:
+           return  # Ignore queries from the IDS itself
+    
+    if not packet.haslayer(DNS):
+        return  # Skip non-DNS packets
+
+    current_time = time.time()
+    dns_packet_timestamp.append(current_time)
+
+    # Remove outdated packets from deque
+    while dns_packet_timestamp and dns_packet_timestamp[0] < current_time - monitor_interval:
+        dns_packet_timestamp.popleft()
+
+    packet_rate = len(dns_packet_timestamp) / monitor_interval
+
+    if packet_rate > DNS_threshold:
+        source_ip = packet[IP].src 
+        print(f"Alert! Potential DNS flood detected from {source_ip} at {current_time:.2f}")
+        print(f"Packet rate: {packet_rate:.2f} packets/second")
+
+
+
+
+# DNS amplification detection
 
 def dns_amplification_detect(packet):
+    src_ip = packet[IP].src
+    if src_ip in whitelisted_ips:
+           return  # Ignore queries from the IDS itself
+    
     if packet.haslayer(DNS) and packet[DNS].qr  == 1: #qr == 1 stands for dns response
         response_size = len(packet)
         current_time = time.time()
         dns_packet_timestamp.append((current_time, response_size))
+        
 
         # removeing outdated packet
         while dns_packet_timestamp and dns_packet_timestamp[0][0] < current_time - monitor_interval:
@@ -114,6 +156,10 @@ def dns_amplification_detect(packet):
     
 def detect_brute_force(packet):
     timestamp = time.time()
+    
+    src_ip = packet[IP].src
+    if src_ip in whitelisted_ips:
+        return  # Ignore queries from the IDS itself
 
     # Detect SSH brute force attack
     if packet.haslayer(TCP) and packet[TCP].dport == 22:
@@ -126,7 +172,7 @@ def detect_brute_force(packet):
         # Remove outdated attempts from the log
         connections_attemps[service][src_ip] = [
             time for time in connections_attemps[service][src_ip]
-            if (timestamp - time).total_seconds() <= time_window
+            if (timestamp - time) <= time_window
         ]
 
         # Check if the number of attempts exceeds the threshold
@@ -148,7 +194,7 @@ def detect_brute_force(packet):
         # Remove outdated attempts from the log
         connections_attemps[service][src_ip] = [
             time for time in connections_attemps[service][src_ip]
-            if (timestamp - time).total_seconds() <= time_window
+            if (timestamp - time) <= time_window
         ]
 
         # Check if the number of attempts exceeds the threshold
@@ -169,7 +215,7 @@ def detect_brute_force(packet):
         # Remove outdated attempts from the log
         connections_attemps[service][src_ip] = [
             time for time in connections_attemps[service][src_ip]
-            if (timestamp - time).total_seconds() <= time_window
+            if (timestamp - time) <= time_window
         ]
 
         # Check if the number of attempts exceeds the threshold
@@ -190,7 +236,7 @@ def detect_brute_force(packet):
         # Remove outdated attempts from the log
         connections_attemps[service][src_ip] = [
             time for time in connections_attemps[service][src_ip]
-            if (timestamp - time).total_seconds() <= time_window
+            if (timestamp - time) <= time_window
         ]
 
         # Check if the number of attempts exceeds the threshold
@@ -212,7 +258,7 @@ def detect_brute_force(packet):
         # Remove outdated attempts from the log
         connections_attemps[service][src_ip] = [
             time for time in connections_attemps[service][src_ip]
-            if (timestamp - time).total_seconds() <= time_window
+            if (timestamp - time) <= time_window
         ]
 
         # Check if the number of attempts exceeds the threshold
@@ -326,9 +372,16 @@ def detect_dns_tunneling(packet):
         domain = packet[DNSQR].qname.decode('utf-8')
         src_ip = packet[IP].src
 
+        if src_ip in whitelisted_ips:
+            return
+        
+        
         #check for long length of domain queries
         if len(domain)>max_query_length:
             print(f"Suspected long domain: {domain} from IP: {src_ip}")
+        
+        if src_ip in whitelisted_ips:
+           return  # Ignore queries from the IDS itself
 
         #check for entropy of domain queries 
         entropy = entropty_calculate(domain)
@@ -352,11 +405,120 @@ def detect_rdp(packet):
         print(f"[RDP Traffic Detected] From IP: {packet[IP].src} -> To IP: {packet[IP].dst}")
 
 
+# Detect DNS Poisoning attack
+
+dns_query_request = defaultdict(set)  # Use a set to store unique IPs
+
+def detect_dns_poisoning(packet):
+    if packet.haslayer(DNS) and packet[DNS].qr == 1:
+        # Check if DNSQR layer exists before accessing it
+        if packet.haslayer(DNSQR):
+            query = packet[DNSQR].qname.decode()
+            src_ip = packet[IP].src
+            
+            if src_ip in whitelisted_ips:
+                return  # Ignore queries from the IDS itself
+
+            # Add the source IP to the set for the DNS query
+            dns_query_request[query].add(src_ip)
+
+            # If more than one unique IP is found for the same query, alert
+            if len(dns_query_request[query]) > 1:
+                print(f"Alert!!! Potential DNS Poisoning detected for query {query} \n from {', '.join(dns_query_request[query])}")
+
+
+# Detect XSS attack
+def detect_xss(packet):
+    if packet.haslayer(Raw):
+        payload = packet.getlayer(Raw).load.decode(errors="ignore")
+
+        xss_patterns = [
+            r"<script.*?>.*?</script>",  # Script tag with content
+            r"javascript:",             # Javascript pseudo-protocol
+            r"eval\s*\(",               # Javascript eval() function
+            r"document\.cookie",       # Accessing document cookies (common in XSS)
+            r"onmouseover\s*=",         # Event handler for mouseover
+            r"alert\s*\(",              # alert() function in Javascript
+            r"window\.location",       # Accessing window location (URL redirection)
+            r"onload\s*=", 
+        ]
+
+
+        for pattern in xss_patterns:
+            if re.search(pattern, payload, re.IGNORECASE):
+                print(f"XSS Attack Detected! Payload : {payload}")
+                return True
+            
+
+# detect fragmentation attack 
+
+# Dictionary to store fragments by IP ID
+fragments = defaultdict(list)
+# Set to track alerted fragments (src, dst, id)
+alerted_fragments = set()
+
+def detect_fragmentaion_attack(packet):
+    if Ether in packet:
+        # Strip Ethernet layer to focus on the payload (IP layer)
+        packet = packet[Ether].payload
+
+    if IP in packet:
+        ip = packet[IP]
+        unique_fragment = (ip.src, ip.dst, ip.id)
+
+        # Check if the packet is fragmented (More Fragments or Fragment Offset > 0)
+        if ip.flags & 1 or ip.frag > 0:
+            # Only alert once for a unique fragmented packet
+            if unique_fragment not in alerted_fragments:
+                print(f"Alert: Potential Fragmentation attack detected! from {ip.src} -> {ip.dst}")
+                alerted_fragments.add(unique_fragment)
+
+            # Add the fragment to the list by its ID
+            fragments[ip.id].append(ip)
+
+            # Reassembly check - sum the payload lengths to estimate if we've seen all fragments
+            total_payload = sum(len(frag.payload) for frag in fragments[ip.id])
+            if total_payload >= ip.len:
+                print(f"Reassembled packet from {ip.src} -> {ip.dst}")
+                # Reset the fragments after reassembly
+                fragments[ip.id].clear()
+
+
+# detect HTTP flood attacks
+
+request_counts = defaultdict(lambda: {"count":0, "timestamp" : deque()})
+time_window = 1
+request_thershold = 100
+
+def detect_HTTP_flood(packet):
+    src_ip = packet[IP].src
+    if src_ip in whitelisted_ips:
+        return
+
+
+    if packet.haslayer(TCP) and packet.haslayer(IP):
+        dest_port = packet[TCP].dport
+        src_ip = packet[IP].src
+        if dest_port in (443,80):
+            current_time = time.time()
+            protocol = "HTTPS" if dest_port == 433 else "HTTP"
+
+            request_data = request_counts[src_ip]
+            request_data["timestamp"].append(current_time)
+
+            while request_data["timestamp"] and current_time - request_data["timestamp"][0] > time_window:
+                request_data["timestamp"].popleft()
+
+            request_data["count"] = len(request_data["timestamp"])
+
+            if request_data["count"] > request_thershold:
+                print(f"Alert Potential {protocol} Flood detected from {src_ip}")
     
 def packet_handler(packet):
     detect_icmp_flood(packet)
-    detect_port_scan(packet)
+    #detect_port_scan(packet)
     detect_syn_flood(packet)
+    #detect_dns_flood(packet)
     dns_amplification_detect(packet)
     detect_brute_force(packet)
     detect_arp_spoofing(packet)
@@ -365,6 +527,48 @@ def packet_handler(packet):
     detect_dns_tunneling(packet)
     detect_rdp(packet)
     detect_smb(packet)
+    detect_dns_poisoning(packet)
+    detect_xss(packet)
+    detect_fragmentaion_attack(packet)
+    detect_HTTP_flood(packet)
 
-print("Our ids is starting......")
+    
+
+import pyfiglet
+from rich.console import Console
+
+# Create a console object for rich text rendering
+console = Console()
+
+# Generate ASCII art with pyfiglet
+ascii_art = pyfiglet.figlet_format("NIDS", font="starwars")
+
+# Print the ASCII art with color
+console.print(ascii_art, style="green")
+
+
+from rich.progress import track
+from time import sleep
+
+# Create a console object
+console = Console()
+
+# Main app
+def cool_app():
+    console.print("\n[bold cyan]Initializing your Network Intrusion Detection System (NIDS)...[/bold cyan]\n")
+    
+    # Simulate loading with a progress bar
+    for step in track(range(10), description="[green]Activating..."):
+        sleep(0.5)
+    
+    console.print("\n[bold cyan][Activated][/bold cyan] [bold]Your NIDS is ready to use![/bold]")
+    console.print("[yellow]Enjoy your experience![/yellow]")
+    console.print("[bold green]Starts monitoring.....")
+
+# Run the app
+if __name__ == "__main__":
+    cool_app()
+
+
 sniff(filter="ip",prn = packet_handler, store = 0)
+
