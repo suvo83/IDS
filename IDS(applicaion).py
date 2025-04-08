@@ -5,7 +5,7 @@ from datetime import timedelta,datetime
 from scapy.layers.http import HTTPRequest
 
 ##################
-whitelisted_ips = {"4.153.72.49", "192.168.0.103", "192.168.0.102"}
+whitelisted_ips = {"0.0.0.0", "11.11.11.11", "4.4.4.4"} # whitelist you ip address to avoid false positive
 
 # for port scan detection
 scan_tracker = {}
