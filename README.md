@@ -48,6 +48,7 @@ Note: Root privileges may be required for packet capturing.
 - ✅ Unauthorized Access Attempts
 
 ## 📊 Screenshots
+Pleas wait for the updates :)
 
 ## 🎯 Future Improvements
 - GUI Dashboard for real-time alerts
@@ -55,39 +56,6 @@ Note: Root privileges may be required for packet capturing.
 - Machine learning-based anomaly detection
 - Email or SMS alerting system
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/suvo83/IDS.git
-cd IDS
-```
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-### 3. Run the IDS
-```bash
-sudo python3 main.py
-```
-Note: Root privileges may be required for packet capturing.
-
-## 🧪 Sample Attack Detection
-- ✅ Port Scanning
-- ✅ SYN Flood
-- ✅ Fragmentation Attack
-- ✅ Malicious Payloads
-- ✅ SQLi
-
-⚙️ **Note:** This Intrusion Detection System is currently under construction. New features and improvements are on the way!
-
-
-## 📊 Screenshots
-
-## 🎯 Future Improvements
-- GUI Dashboard for real-time alerts
-- Integration with a SIEM system
-- Machine learning-based anomaly detection
-- Email or SMS alerting system
 
 ## 🙋‍♂️ Author
 **Subham Samanta** <br>
