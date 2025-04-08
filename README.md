@@ -2,7 +2,7 @@
 
 # 🛡️ Intrusion Detection System (IDS)
 
-A lightweight Intrusion Detection System built using Python and C, designed to monitor network traffic and detect suspicious or malicious activities. This IDS project showcases a rule-based and anomaly detection approach with real-time alerting and logging capabilities.
+A lightweight Intrusion Detection System built using Python and Scapy, designed to monitor network traffic and detect suspicious or malicious activities. This IDS project showcases a rule-based and anomaly detection approach with real-time alerting and logging capabilities.
 
 ---
 
@@ -13,7 +13,6 @@ A lightweight Intrusion Detection System built using Python and C, designed to m
 - 📈 Anomaly detection based on network behavior
 - 📄 Detailed logging of detected intrusions
 - 🔔 Real-time alerts on terminal or file
-- 🧠 Modular and extensible design for custom rules
 
 ---
 
@@ -61,7 +60,7 @@ Note: Root privileges may be required for packet capturing.
 ```bash
 git clone https://github.com/suvo83/IDS.git
 cd IDS
-
+```
 ### 2. Install Dependencies
 ```bash
 pip install -r requirements.txt
@@ -79,6 +78,9 @@ Note: Root privileges may be required for packet capturing.
 - ✅ Malicious Payloads
 - ✅ SQLi
 
+⚙️ **Note:** This Intrusion Detection System is currently under construction. New features and improvements are on the way!
+
+
 ## 📊 Screenshots
 
 ## 🎯 Future Improvements
@@ -86,3 +88,25 @@ Note: Root privileges may be required for packet capturing.
 - Integration with a SIEM system
 - Machine learning-based anomaly detection
 - Email or SMS alerting system
+
+## 🙋‍♂️ Author
+**Subham Samanta** <br>
+Cybersecurity Enthusiast | CEH Certified | Top 3% TryHackMe <br> 
+📍 Kolkata, India <br>
+📧 [subhamsamanta037@gmail.com] <br>
+🔗 [LinkedIn](https://www.linkedin.com/in/subham-samanta-25402b273/) | [GitHub](https://github.com/suvo83)
+
+## 📜 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+## ⚠️ Disclaimer
+
+This project is developed strictly for **educational and research purposes only**.
+
+- The Intrusion Detection System (IDS) is designed to detect and log potentially malicious network activity in a **controlled environment**.
+- Any misuse of this project to attack, compromise, or interfere with real-world systems or networks without authorization is strictly prohibited and illegal.
+- The author (**Subham Samanta**) is **not responsible** for any damages or legal issues that arise from the misuse of this tool.
+
+By using this project, you agree to use it **responsibly** and **within legal boundaries**.
+
